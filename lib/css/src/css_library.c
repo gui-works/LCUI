@@ -95,10 +95,10 @@ typedef struct css_style_link_t {
 } css_style_link_t;
 
 static struct css_module_t {
-	 /**
-	  * 样式组列表
-	  * list_t<css_style_group_t*>
-	  */
+	/**
+	 * 样式组列表
+	 * list_t<css_style_group_t*>
+	 */
 	list_t groups;
 
 	/**
@@ -107,11 +107,18 @@ static struct css_module_t {
 	 */
 	dict_t *cache;
 
- 	/**
-	  * 样式属性名称表，以值的名称索引
-	  * dict_t<int, string>
-	  */
-	dict_t *properties;
+	/**
+	 * 样式属性列表
+	 * css_property_definition_t*[]
+	 */
+	css_property_definition_t **properties;
+	size_t properties_length;
+
+	/**
+	 * 样式属性名称映射表
+	 * dict_t<string, css_property_definition_t>
+	 */
+	dict_t *property_map;
 
 	/**
 	 * 样式属性值表，以值的名称索引
@@ -140,153 +147,132 @@ typedef struct css_keyword_t {
 
 /* clang-format off */
 
-static css_keyword_t css_style_prop_name_map[] = {
-	{ css_key_visibility, "visibility" },
-	{ css_key_width, "width" },
-	{ css_key_height, "height" },
-	{ css_key_min_width, "min-width" },
-	{ css_key_min_height, "min-height" },
-	{ css_key_max_width, "max-width" },
-	{ css_key_max_height, "max-height" },
-	{ css_key_display, "display" },
-	{ css_key_z_index, "z-index" },
-	{ css_key_top, "top" },
-	{ css_key_right, "right" },
-	{ css_key_left, "left" },
-	{ css_key_bottom, "bottom" },
-	{ css_key_position, "position" },
-	{ css_key_opacity, "opacity" },
-	{ css_key_vertical_align, "vertical-align" },
-	{ css_key_background_color, "background-color" },
-	{ css_key_background_position, "background-position" },
-	{ css_key_background_size, "background-size" },
-	{ css_key_background_image, "background-image" },
-	{ css_key_padding_left, "padding-left" },
-	{ css_key_padding_right, "padding-right" },
-	{ css_key_padding_top, "padding-top" },
-	{ css_key_padding_bottom, "padding-bottom" },
-	{ css_key_margin_left, "margin-left" },
-	{ css_key_margin_right, "margin-right" },
-	{ css_key_margin_top, "margin-top" },
-	{ css_key_margin_bottom, "margin-bottom" },
-	{ css_key_border_top_color, "border-top-color" },
-	{ css_key_border_right_color, "border-right-color" },
-	{ css_key_border_bottom_color, "border-bottom-color" },
-	{ css_key_border_left_color, "border-left-color" },
-	{ css_key_border_top_width, "border-top-width" },
-	{ css_key_border_right_width, "border-right-width" },
-	{ css_key_border_bottom_width, "border-bottom-width" },
-	{ css_key_border_left_width, "border-left-width" },
-	{ css_key_border_top_width, "border-top-width" },
-	{ css_key_border_right_width, "border-right-width" },
-	{ css_key_border_bottom_width, "border-bottom-width" },
-	{ css_key_border_left_width, "border-left-width" },
-	{ css_key_border_top_style, "border-top-style" },
-	{ css_key_border_right_style, "border-right-style" },
-	{ css_key_border_bottom_style, "border-bottom-style" },
-	{ css_key_border_left_style, "border-left-style" },
-	{ css_key_border_top_left_radius, "border-top-left-radius" },
-	{ css_key_border_top_right_radius, "border-top-right-radius" },
-	{ css_key_border_bottom_left_radius, "border-bottom-left-radius" },
-	{ css_key_border_bottom_right_radius, "border-bottom-right-radius" },
-	{ css_key_box_shadow_x, "box-shadow-x" },
-	{ css_key_box_shadow_y, "box-shadow-y" },
-	{ css_key_box_shadow_blur, "box-shadow-blur" },
-	{ css_key_box_shadow_spread, "box-shadow-spread" },
-	{ css_key_box_shadow_color, "box-shadow-color" },
-	{ css_key_pointer_events, "pointer-events" },
-	{ css_key_focusable, "focusable" },
-	{ css_key_box_sizing, "box-sizing" },
-	{ css_key_flex_basis, "flex-basis" },
-	{ css_key_flex_direction, "flex-direction" },
-	{ css_key_flex_grow, "flex-grow" },
-	{ css_key_flex_shrink, "flex-shrink" },
-	{ css_key_flex_wrap, "flex-wrap" },
-	{ css_key_justify_content, "justify-content" },
-	{ css_key_align_content, "align-content" },
-	{ css_key_align_items, "align-items" },
-	{ css_key_color, "color" },
-	{ css_key_font_family, "font-family" },
-	{ css_key_font_size, "font-size" },
-	{ css_key_font_style, "font-style" },
-	{ css_key_text_align, "text-align" },
-	{ css_key_line_height, "line-height" },
-	{ css_key_content, "content" },
-	{ css_key_white_space, "white-space" }
-};
+// https://developer.mozilla.org/en-US/docs/Web/API/CSS/RegisterProperty
 
-/** 样式字符串与标识码的映射表 */
-static css_keyword_t css_keyword_map[] = {
-	{ CSS_KEYWORD_NONE, "none" },
-	{ CSS_KEYWORD_AUTO, "auto" },
-	{ CSS_KEYWORD_INHERIT, "inherit" },
-	{ CSS_KEYWORD_INITIAL, "initial" },
-	{ CSS_KEYWORD_CONTAIN, "contain" },
-	{ CSS_KEYWORD_COVER, "cover" },
-	{ CSS_KEYWORD_LEFT, "left" },
-	{ CSS_KEYWORD_CENTER, "center" },
-	{ CSS_KEYWORD_RIGHT, "right" },
-	{ CSS_KEYWORD_TOP, "top" },
-	{ CSS_KEYWORD_TOP_LEFT, "top left" },
-	{ CSS_KEYWORD_TOP_CENTER, "top center" },
-	{ CSS_KEYWORD_TOP_RIGHT, "top right" },
-	{ CSS_KEYWORD_MIDDLE, "middle" },
-	{ CSS_KEYWORD_CENTER_LEFT, "center left" },
-	{ CSS_KEYWORD_CENTER_CENTER, "center center" },
-	{ CSS_KEYWORD_CENTER_RIGHT, "center right" },
-	{ CSS_KEYWORD_BOTTOM, "bottom" },
-	{ CSS_KEYWORD_BOTTOM_LEFT, "bottom left" },
-	{ CSS_KEYWORD_BOTTOM_CENTER, "bottom center" },
-	{ CSS_KEYWORD_BOTTOM_RIGHT, "bottom right" },
-	{ CSS_KEYWORD_SOLID, "solid" },
-	{ CSS_KEYWORD_DOTTED, "dotted" },
-	{ CSS_KEYWORD_DOUBLE, "double" },
-	{ CSS_KEYWORD_DASHED, "dashed" },
-	{ CSS_KEYWORD_CONTENT_BOX, "content-box" },
-	{ CSS_KEYWORD_PADDING_BOX, "padding-box" },
-	{ CSS_KEYWORD_BORDER_BOX, "border-box" },
-	{ CSS_KEYWORD_GRAPH_BOX, "graph-box" },
-	{ CSS_KEYWORD_STATIC, "static" },
-	{ CSS_KEYWORD_RELATIVE, "relative" },
-	{ CSS_KEYWORD_ABSOLUTE, "absolute" },
-	{ CSS_KEYWORD_BLOCK, "block" },
-	{ CSS_KEYWORD_INLINE_BLOCK, "inline-block" },
-	{ CSS_KEYWORD_FLEX, "flex" },
-	{ CSS_KEYWORD_NORMAL, "normal" },
-	{ CSS_KEYWORD_FLEX_START, "flex-start" },
-	{ CSS_KEYWORD_FLEX_END, "flex-end" },
-	{ CSS_KEYWORD_STRETCH, "stretch" },
-	{ CSS_KEYWORD_SPACE_BETWEEN, "space-between" },
-	{ CSS_KEYWORD_SPACE_AROUND, "space-around" },
-	{ CSS_KEYWORD_SPACE_EVENLY, "space-evenly" },
-	{ CSS_KEYWORD_NOWRAP, "nowrap" },
-	{ CSS_KEYWORD_WRAP, "wrap" },
-	{ CSS_KEYWORD_ROW, "row" },
-	{ CSS_KEYWORD_COLUMN, "column" }
-};
-
-static int css_register_property(int key, const char *name)
+int css_compile_syntax(const char *syntax_str, css_syntax_t *out)
 {
-	if (!css.properties->type->val_dup) {
-		return -2;
+	char name[32];
+	int name_len;
+	unsigned i;
+
+	const char *p;
+	struct name_value_map {
+		const char *name;
+		css_style_value_parsing_func_t parser;
+	} map[] = {
+		{ "length", css_parse_length_value },
+		{ "percentage", css_parse_percentage_value },
+		{ "keyword", css_parse_keyword_value },
+		{ "color", css_parse_color_value },
+		{ "image", css_parse_image_value },
+	};
+	const unsigned map_size = sizeof(map) / sizeof(struct name_value_map);
+
+	out->length = 0;
+	for (p = syntax_str; *p; ++p) {
+		if (*p == '<') {
+			name_len = 0;
+			continue;
+		}
+		if (p == '|') {
+			return p + 1;
+		}
+		if (*p != '>') {
+			if (name_len == -1) {
+				continue;
+			}
+			if (name_len > sizeof(name)) {
+				return NULL;
+			}
+			name[name_len++] = *p;
+			continue;
+		}
+		name[name_len] = 0;
+		name_len = -1;
+		for (i = 0; i < map_size; ++i) {
+			if (strcmp(name, map[i].name) == 0) {
+				out->parsers[out->length++] = map[i].parser;
+				break;
+			}
+		}
+		if (i == map_size) {
+			return NULL;
+		}
 	}
-	return dict_add(css.properties, &key, (void*)name);
+	return 0;
 }
 
-int css_register_property_name(const char *name)
+int css_parse_style_value_with_syntax(css_syntax_t *syntax, const char *str,
+				      css_style_value_t *val)
 {
-	int key;
-	key = css.count++;
-	if (css_register_property(key, name) != 0) {
-		--css.count;
+	unsigned i;
+
+	for (i = 0; i < syntax->length; ++i) {
+		if (syntax->parsers[i](str, val) == 0) {
+			return 0;
+		}
+	}
+	return -1;
+}
+
+static void css_property_definition_destroy(css_property_definition_t *prop)
+{
+	if (prop->name) {
+		free(prop->name);
+		prop->name = NULL;
+	}
+	free(prop);
+}
+
+static int css_register_property_with_key(int key, const char *name, const char *syntax,
+			  const char *initial_value)
+{
+	css_property_definition_t *prop;
+	css_property_definition_t **props;
+
+	if (key >= css.properties_length) {
+		props = realloc(css.properties, key * sizeof(css_property_definition_t *));
+		if (!props) {
+			return -1;
+		}
+		css.properties = props;
+		css.properties_length = key;
+	}
+	prop = malloc(sizeof(css_property_definition_t));
+	if (prop) {
 		return -1;
 	}
-	return key;
+	if (css_compile_syntax(syntax, &prop->syntax) != 0) {
+		css_property_definition_destroy(prop);
+		return -2;
+	}
+	css_parse_style_value_with_syntax(&prop->syntax, initial_value,
+					  &prop->initial_value);
+	prop->name = strdup2(name);
+	prop->key = key;
+	props[prop->key] = prop;
+	dict_add(css.property_map, prop->name, prop);
+	css.count++;
+	return prop->key;
 }
 
-const char *css_get_property_name(int key)
+int css_register_property(const char *name, const char *syntax,
+			  const char *initial_value)
 {
-	return dict_fetch_value(css.properties, &key);
+	return css_register_property_with_key((int)css.properties_length, name, syntax, initial_value);
+}
+
+const css_property_definition_t *css_get_property(const char *name)
+{
+	return dict_fetch_value(css.properties, name);
+}
+
+const css_property_definition_t *css_get_property_by_key(int key)
+{
+	if (key >= 0 && (size_t)key < css.properties_length) {
+		return css.properties[key];
+	}
+	return NULL;
 }
 
 static css_keyword_t *keyword_create(int key, const char *name)
@@ -1441,52 +1427,34 @@ static void css_print_property_name(int key)
 	logger_debug("%s: ", key > STYLE_KEY_TOTAL ? " (+)" : "");
 }
 
-static void css_unit_value_print(css_unit_value_t *s)
+static void css_style_value_print(css_style_value_t *s)
 {
-	switch (s->unit) {
-	case CSS_UNIT_AUTO:
-		logger_debug("auto");
+	switch (s->type) {
+	case CSS_INVALID_VALUE:
+		logger_info("<invalid value>");
 		break;
-	case CSS_UNIT_BOOL:
-		logger_debug("%s", s->val_bool ? "true" : "false");
-		break;
-	case CSS_UNIT_COLOR: {
-		pd_color_t *clr = &s->val_color;
-		if (clr->alpha < 255) {
-			logger_debug("rgba(%d,%d,%d,%g)", clr->r, clr->g, clr->b,
-				clr->a / 255.0);
+	case CSS_COLOR_VALUE:
+		if (s->color_value.a < 255) {
+			logger_info("rgba(%d,%d,%d,%g)", s->color_value.r, s->color_value.g, s->color_value.b,
+				s->color_value.a / 255.0);
 		} else {
-			logger_debug("#%02x%02x%02x", clr->r, clr->g, clr->b);
+			logger_info("#%02x%02x%02x", s->color_value.r, s->color_value.g, s->color_value.b);
 		}
+	case CSS_IMAGE_VALUE:
+		logger_info(s->image_value);
 		break;
-	}
-	case CSS_UNIT_PX:
-		logger_debug("%gpx", s->val_px);
+	case CSS_STRING_VALUE:
+		logger_info(s->string_value);
 		break;
-	case CSS_UNIT_DIP:
-		logger_debug("%gdip", s->val_dip);
+	case CSS_KEYWORD_VALUE:
+		logger_info("%s", css_get_keyword_name(s->keyword_value));
 		break;
-	case CSS_UNIT_SP:
-		logger_debug("%gsp", s->val_sp);
+	case CSS_UNIT_VALUE:
+		logger_info("%g%s", s->unit_value.value, s->unit_value.unit);
 		break;
-	case CSS_UNIT_STRING:
-		logger_debug("%s", s->val_string);
-		break;
-	case CSS_UNIT_WSTRING:
-		logger_debug("%S", s->val_wstring);
-		break;
-	case CSS_UNIT_SCALE:
-		logger_debug("%g%%", s->val_scale * 100);
-		break;
-	case CSS_UNIT_KEYWORD:
-		logger_debug("%s", css_get_keyword_name(s->val_keyword));
-		break;
-	case CSS_UNIT_INT:
-		logger_debug("%d", s->val_int);
-		break;
-	default:
-		logger_debug("%g", s->value);
-		break;
+	case CSS_UNPARSED_VALUE:
+		logger_info(s->unparsed_value);
+	default: break;
 	}
 	logger_debug(";\n");
 }
@@ -1498,9 +1466,9 @@ void css_style_properties_print(css_style_props_t *list)
 
 	for (list_each(node, list)) {
 		snode = node->data;
-		if (snode->style.is_valid) {
+		if (snode->style.type != CSS_NO_VALUE) {
 			css_print_property_name(snode->key);
-			css_unit_value_print(&snode->style);
+			css_style_value_print(&snode->style);
 		}
 	}
 }
@@ -1508,11 +1476,11 @@ void css_style_properties_print(css_style_props_t *list)
 void css_style_declartation_print(css_style_decl_t *ss)
 {
 	int key;
-	css_unit_value_t *s;
+	css_style_value_t *s;
 
 	for (key = 0; key < ss->length; ++key) {
 		s = &ss->sheet[key];
-		if (s->is_valid) {
+		if (s->type != CSS_NO_VALUE) {
 			css_print_property_name(key);
 			css_unit_value_print(s);
 		}
@@ -1706,19 +1674,229 @@ static void css_init_properties(void)
 {
 	static dict_type_t dt = { 0 };
 
-	dt.val_dup = names_dict_value_dup;
-	dt.key_dup = ikey_dict_key_dup;
-	dt.key_compare = ikey_dict_key_compare;
-	dt.val_destructor = names_dict_value_destructor;
-	dt.hash_function = ikey_dict_hash;
-	dt.key_destructor = ikey_dict_key_destructor;
-	css.properties = dict_create(&dt, NULL);
+	dict_init_string_key_type(&dt);
+	css.property_map = dict_create(&dt, NULL);
+	css.properties = NULL;
+	css.properties_length = 0;
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/visibility */
+	css_register_property_with_key(css_key_visibility, "visibility", "visible | hidden", "visible");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
+	css_register_property_with_key(css_key_width, "width", "auto | <length> | <percentage>", "auto");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/height */
+	css_register_property_with_key(css_key_height, "height", "auto | <length> | <percentage>", "auto");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/min-width */
+	css_register_property_with_key(css_key_min_width, "min-width", "auto | <length> | <percentage>", "auto");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/min-height */
+	css_register_property_with_key(css_key_min_height, "min-height", "auto | <length> | <percentage>", "auto");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/max-width */
+	css_register_property_with_key(css_key_max_width, "max-width", "auto | <length> | <percentage>", "auto");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/max-height */
+	css_register_property_with_key(css_key_max_height, "max-height", "auto | <length> | <percentage>", "auto");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/display */
+	css_register_property_with_key(css_key_display, "display", "none | block | inline-block | flex", "block");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/z-index */
+	css_register_property_with_key(css_key_z_index, "z-index", "auto | <integer>", "auto");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/top */
+	css_register_property_with_key(css_key_top, "top", "<length> | <percentage> | auto", "auto");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSSright */
+	css_register_property_with_key(css_key_right, "right", "<length> | <percentage> | auto", "auto");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/left */
+	css_register_property_with_key(css_key_left, "left", "<length> | <percentage> | auto", "auto");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/bottom */
+	css_register_property_with_key(css_key_bottom, "bottom", "<length> | <percentage> | auto", "auto");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/position */
+	css_register_property_with_key(css_key_position, "position", "static | relative | absolute", "static");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/opacity */
+	css_register_property_with_key(css_key_opacity, "opacity", "<number> | <percentage>", "1");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/vertical-align */
+	css_register_property_with_key(css_key_vertical_align, "vertical-align", "middle | bottom | top", "top");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/background-color */
+	css_register_property_with_key(css_key_background_color, "background-color", "<color>", "transparent");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/background-position */
+	css_register_property_with_key(css_key_background_position, "background-position",
+	"[\
+		[ left | center | right | top | bottom | <length> | <percentage> ]\
+		| [ left | center | right | <length> | <percentage> ] [ top | center | bottom | <length> | <percentage> ]
+	]",
+	"0% 0%");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/background-size */
+	css_register_property_with_key(css_key_background_size, "background-size", "[ <length> | <percentage> | auto ]{1,2} | cover | contain", "auto auto");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/background-image */
+	css_register_property_with_key(css_key_background_image, "background-image", "none | <image>", "none");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/padding-left */
+	css_register_property_with_key(css_key_padding_left, "padding-left", "<length> | <percentage>", "0");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/padding-right */
+	css_register_property_with_key(css_key_padding_right, "padding-right", "<length> | <percentage>", "0");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/padding-top */
+	css_register_property_with_key(css_key_padding_top, "padding-top", "<length> | <percentage>", "0");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/padding-bottom */
+	css_register_property_with_key(css_key_padding_bottom, "padding-bottom", "<length> | <percentage>", "0");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/margin-left */
+	css_register_property_with_key(css_key_margin_left, "margin-left", "<length> | <percentage>", "0");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/margin-right */
+	css_register_property_with_key(css_key_margin_right, "margin-right", "<length> | <percentage>", "0");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/margin-top */
+	css_register_property_with_key(css_key_margin_top, "margin-top", "<length> | <percentage>", "0");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/margin-bottom */
+	css_register_property_with_key(css_key_margin_bottom, "margin-bottom", "<length> | <percentage>", "0");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/border-top-color */
+	css_register_property_with_key(css_key_border_top_color, "border-top-color", "<color>", "transparent");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/border-right-color */
+	css_register_property_with_key(css_key_border_right_color, "border-right-color", "<color>", "transparent");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/border-bottom-color */
+	css_register_property_with_key(css_key_border_bottom_color, "border-bottom-color", "<color>", "transparent");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/border-left-color */
+	css_register_property_with_key(css_key_border_left_color, "border-left-color", "<color>", "transparent");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/border-top-width */
+	css_register_property_with_key(css_key_border_top_width, "border-top-width", "<length>", "0");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/border-right-width */
+	css_register_property_with_key(css_key_border_right_width, "border-right-width", "<length>", "0");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/border-bottom-width */
+	css_register_property_with_key(css_key_border_bottom_width, "border-bottom-width", "<length>", "0");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/border-left-width */
+	css_register_property_with_key(css_key_border_left_width, "border-left-width", "<length>", "0");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/border-top-width */
+	css_register_property_with_key(css_key_border_top_width, "border-top-width", "<length>", "0");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/border-right-width */
+	css_register_property_with_key(css_key_border_right_width, "border-right-width", "<length>", "0");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/border-bottom-width */
+	css_register_property_with_key(css_key_border_bottom_width, "border-bottom-width", "<length>", "0");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/border-left-width */
+	css_register_property_with_key(css_key_border_left_width, "border-left-width", "<length>", "0");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/border-top-style */
+	css_register_property_with_key(css_key_border_top_style, "border-top-style", "none | solid", "none");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/border-right-style */
+	css_register_property_with_key(css_key_border_right_style, "border-right-style", "none | solid", "none");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/border-bottom-style */
+	css_register_property_with_key(css_key_border_bottom_style, "border-bottom-style", "none | solid", "none");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/border-left-style */
+	css_register_property_with_key(css_key_border_left_style, "border-left-style", "none | solid", "none");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/border-top-left-radius */
+	css_register_property_with_key(css_key_border_top_left_radius, "border-top-left-radius", "<length> | <percentage>", "0");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/border-top-right-radius */
+	css_register_property_with_key(css_key_border_top_right_radius, "border-top-right-radius", "<length> | <percentage>", "0");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/border-bottom-left-radius */
+	css_register_property_with_key(css_key_border_bottom_left_radius, "border-bottom-left-radius", "<length> | <percentage>", "0");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/border-bottom-right-radius */
+	css_register_property_with_key(css_key_border_bottom_right_radius, "border-bottom-right-radius", "<length> | <percentage>", "0");
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
+	css_register_property_with_key(css_key_box_shadow, "box-shadow", "none | <shadow>", "none");
+
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
+	css_register_property_with_key(css_key_pointer_events, "pointer-events" },
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
+	css_register_property_with_key(css_key_focusable, "focusable" },
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
+	css_register_property_with_key(css_key_box_sizing, "box-sizing" },
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
+	css_register_property_with_key(css_key_flex_basis, "flex-basis" },
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
+	css_register_property_with_key(css_key_flex_direction, "flex-direction" },
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
+	css_register_property_with_key(css_key_flex_grow, "flex-grow" },
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
+	css_register_property_with_key(css_key_flex_shrink, "flex-shrink" },
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
+	css_register_property_with_key(css_key_flex_wrap, "flex-wrap" },
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
+	css_register_property_with_key(css_key_justify_content, "justify-content" },
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
+	css_register_property_with_key(css_key_align_content, "align-content" },
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
+	css_register_property_with_key(css_key_align_items, "align-items" },
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
+	css_register_property_with_key(css_key_color, "color" },
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
+	css_register_property_with_key(css_key_font_family, "font-family" },
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
+	css_register_property_with_key(css_key_font_size, "font-size" },
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
+	css_register_property_with_key(css_key_font_style, "font-style" },
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
+	css_register_property_with_key(css_key_text_align, "text-align" },
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
+	css_register_property_with_key(css_key_line_height, "line-height" },
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
+	css_register_property_with_key(css_key_content, "content" },
+
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
+	css_register_property_with_key(css_key_white_space, "white-space" }
+
 }
 
 static void css_destroy_properties(void)
 {
-	dict_destroy(css.properties);
+	dict_destroy(css.property_map);
+	css.property_map = NULL;
 	css.properties = NULL;
+	css.properties_length = 0;
 }
 
 static void css_init_keywords(void)
@@ -1732,6 +1910,53 @@ static void css_init_keywords(void)
 	keys_dt.val_destructor = keyword_destructor;
 	css.keywords = dict_create(&keys_dt, NULL);
 	css.keyword_names = dict_create(&names_dt, NULL);
+
+	css_register_keyword(CSS_KEYWORD_NONE, "none");
+	css_register_keyword(CSS_KEYWORD_AUTO, "auto");
+	css_register_keyword(CSS_KEYWORD_INHERIT, "inherit");
+	css_register_keyword(CSS_KEYWORD_INITIAL, "initial");
+	css_register_keyword(CSS_KEYWORD_CONTAIN, "contain");
+	css_register_keyword(CSS_KEYWORD_COVER, "cover");
+	css_register_keyword(CSS_KEYWORD_LEFT, "left");
+	css_register_keyword(CSS_KEYWORD_CENTER, "center");
+	css_register_keyword(CSS_KEYWORD_RIGHT, "right");
+	css_register_keyword(CSS_KEYWORD_TOP, "top");
+	css_register_keyword(CSS_KEYWORD_TOP_LEFT, "top left");
+	css_register_keyword(CSS_KEYWORD_TOP_CENTER, "top center");
+	css_register_keyword(CSS_KEYWORD_TOP_RIGHT, "top right");
+	css_register_keyword(CSS_KEYWORD_MIDDLE, "middle");
+	css_register_keyword(CSS_KEYWORD_CENTER_LEFT, "center left");
+	css_register_keyword(CSS_KEYWORD_CENTER_CENTER, "center center");
+	css_register_keyword(CSS_KEYWORD_CENTER_RIGHT, "center right");
+	css_register_keyword(CSS_KEYWORD_BOTTOM, "bottom");
+	css_register_keyword(CSS_KEYWORD_BOTTOM_LEFT, "bottom left");
+	css_register_keyword(CSS_KEYWORD_BOTTOM_CENTER, "bottom center");
+	css_register_keyword(CSS_KEYWORD_BOTTOM_RIGHT, "bottom right");
+	css_register_keyword(CSS_KEYWORD_SOLID, "solid");
+	css_register_keyword(CSS_KEYWORD_DOTTED, "dotted");
+	css_register_keyword(CSS_KEYWORD_DOUBLE, "double");
+	css_register_keyword(CSS_KEYWORD_DASHED, "dashed");
+	css_register_keyword(CSS_KEYWORD_CONTENT_BOX, "content-box");
+	css_register_keyword(CSS_KEYWORD_PADDING_BOX, "padding-box");
+	css_register_keyword(CSS_KEYWORD_BORDER_BOX, "border-box");
+	css_register_keyword(CSS_KEYWORD_GRAPH_BOX, "graph-box");
+	css_register_keyword(CSS_KEYWORD_STATIC, "static");
+	css_register_keyword(CSS_KEYWORD_RELATIVE, "relative");
+	css_register_keyword(CSS_KEYWORD_ABSOLUTE, "absolute");
+	css_register_keyword(CSS_KEYWORD_BLOCK, "block");
+	css_register_keyword(CSS_KEYWORD_INLINE_BLOCK, "inline-block");
+	css_register_keyword(CSS_KEYWORD_FLEX, "flex");
+	css_register_keyword(CSS_KEYWORD_NORMAL, "normal");
+	css_register_keyword(CSS_KEYWORD_FLEX_START, "flex-start");
+	css_register_keyword(CSS_KEYWORD_FLEX_END, "flex-end");
+	css_register_keyword(CSS_KEYWORD_STRETCH, "stretch");
+	css_register_keyword(CSS_KEYWORD_SPACE_BETWEEN, "space-between");
+	css_register_keyword(CSS_KEYWORD_SPACE_AROUND, "space-around");
+	css_register_keyword(CSS_KEYWORD_SPACE_EVENLY, "space-evenly");
+	css_register_keyword(CSS_KEYWORD_NOWRAP, "nowrap");
+	css_register_keyword(CSS_KEYWORD_WRAP, "wrap");
+	css_register_keyword(CSS_KEYWORD_ROW, "row");
+	css_register_keyword(CSS_KEYWORD_COLUMN, "column");
 }
 
 static void css_destroy_keywords(void)
@@ -1748,17 +1973,9 @@ void css_init(void)
 
 	css.strpool = strpool_create();
 	css_init_cache();
-	css_init_properties();
 	css_init_keywords();
+	css_init_properties();
 	list_create(&css.groups);
-	skn_end = css_style_prop_name_map + LEN(css_style_prop_name_map);
-	for (skn = css_style_prop_name_map; skn < skn_end; ++skn) {
-		css_register_property(skn->key, skn->name);
-	}
-	skn_end = css_keyword_map + LEN(css_keyword_map);
-	for (skn = css_keyword_map; skn < skn_end; ++skn) {
-		css_register_keyword(skn->key, skn->name);
-	}
 	css.count = STYLE_KEY_TOTAL;
 }
 

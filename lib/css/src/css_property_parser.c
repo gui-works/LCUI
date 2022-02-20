@@ -19,14 +19,14 @@ static struct css_property_parser_module_t {
 #define set_property(KEY, VALUE) \
 	css_style_parser_set_property(parser, KEY, VALUE)
 
-static int split_values(const char *str, css_unit_value_t *slist, int max_len,
+static int split_values(const char *str, css_style_value_t *slist, int max_len,
 			int mode)
 {
 	char **values;
 	const char *p;
 	int val, vi = 0, vj = 0, n_quotes = 0;
 
-	memset(slist, 0, sizeof(css_unit_value_t) * max_len);
+	memset(slist, 0, sizeof(css_style_value_t) * max_len);
 	values = (char **)calloc(max_len, sizeof(char *));
 	values[0] = (char *)malloc(sizeof(char) * 64);
 	for (p = str; *p; ++p) {
@@ -57,9 +57,8 @@ static int split_values(const char *str, css_unit_value_t *slist, int max_len,
 	for (vj = 0; vj < vi; ++vj) {
 		DEBUG_MSG("[%d] %s\n", vj, values[vj]);
 		if (strcmp(values[vj], "auto") == 0) {
-			slist[vj].unit = CSS_UNIT_AUTO;
-			slist[vj].val_keyword = CSS_KEYWORD_AUTO;
-			slist[vj].is_valid = TRUE;
+			slist[vj].type = CSS_KEYWORD_VALUE;
+			slist[vj].keyword_value = CSS_KEYWORD_AUTO;
 			continue;
 		}
 		if (mode & SPLIT_NUMBER) {
@@ -77,9 +76,8 @@ static int split_values(const char *str, css_unit_value_t *slist, int max_len,
 		if (mode & SPLIT_STYLE) {
 			val = css_get_keyword_key(values[vj]);
 			if (val > 0) {
-				slist[vj].keyword = val;
-				slist[vj].unit = CSS_UNIT_KEYWORD;
-				slist[vj].is_valid = TRUE;
+				slist[vj].type = CSS_KEYWORD_VALUE;
+				slist[vj].keyword_value = val;
 				DEBUG_MSG("[%d]:parse ok\n", vj);
 				continue;
 			}
@@ -96,13 +94,13 @@ clean:
 	return vi;
 }
 
-static int css_parse_value(css_style_parser_t *parser, const char *str)
+static int css_parse_numberic_value(css_style_parser_t *parser, const char *str)
 {
-	css_unit_value_t s;
+	css_style_value_t s;
 
-	if (sscanf(str, "%d", &s.val_int) == 1) {
-		s.is_valid = TRUE;
-		s.unit = CSS_UNIT_INT;
+	s.type = CSS_INVALID_VALUE;
+	if (sscanf(str, "%g", &s.numberic_value) == 1) {
+		s.type = CSS_NUMBERIC_VALUE;
 		set_current_property(&s);
 		return 0;
 	}
@@ -111,7 +109,7 @@ static int css_parse_value(css_style_parser_t *parser, const char *str)
 
 static int css_parse_number_value(css_style_parser_t *parser, const char *str)
 {
-	css_unit_value_t s;
+	css_style_value_t s;
 
 	if (css_parse_number(&s, str)) {
 		set_current_property(&s);
@@ -129,7 +127,7 @@ static int css_parse_number_value(css_style_parser_t *parser, const char *str)
 
 static int css_parse_string_value(css_style_parser_t *parser, const char *str)
 {
-	css_unit_value_t s;
+	css_style_value_t s;
 
 	s.is_valid = TRUE;
 	s.unit = CSS_UNIT_STRING;
@@ -140,7 +138,7 @@ static int css_parse_string_value(css_style_parser_t *parser, const char *str)
 
 static int css_parse_boolean_value(css_style_parser_t *parser, const char *str)
 {
-	css_unit_value_t s = { 0 };
+	css_style_value_t s = { 0 };
 
 	if (strcmp(str, "true") == 0) {
 		s.is_valid = TRUE;
@@ -168,7 +166,7 @@ static int css_parse_boolean_value(css_style_parser_t *parser, const char *str)
 
 static int css_parse_color_value(css_style_parser_t *parser, const char *str)
 {
-	css_unit_value_t s;
+	css_style_value_t s;
 
 	if (css_parse_color(&s, str)) {
 		set_current_property(&s);
@@ -179,7 +177,7 @@ static int css_parse_color_value(css_style_parser_t *parser, const char *str)
 
 static int css_parse_image_value(css_style_parser_t *parser, const char *str)
 {
-	css_unit_value_t s;
+	css_style_value_t s;
 
 	if (css_parse_url(&s, str, parser->dirname)) {
 		set_current_property(&s);
@@ -190,7 +188,7 @@ static int css_parse_image_value(css_style_parser_t *parser, const char *str)
 
 static int css_parse_keyword_value(css_style_parser_t *parser, const char *str)
 {
-	css_unit_value_t s;
+	css_style_value_t s;
 	int v = css_get_keyword_key(str);
 
 	if (v < 0) {
@@ -206,7 +204,7 @@ static int css_parse_keyword_value(css_style_parser_t *parser, const char *str)
 static int css_parse_border_property(css_style_parser_t *parser,
 				     const char *str)
 {
-	css_unit_value_t slist[3];
+	css_style_value_t slist[3];
 	int i, mode = SPLIT_COLOR | SPLIT_NUMBER | SPLIT_STYLE;
 
 	if (split_values(str, slist, 3, mode) < 1) {
@@ -218,35 +216,23 @@ static int css_parse_border_property(css_style_parser_t *parser,
 		}
 		switch (slist[i].unit) {
 		case CSS_UNIT_COLOR:
-			set_property(css_key_border_top_color,
-				     &slist[i]);
-			set_property(css_key_border_right_color,
-				     &slist[i]);
-			set_property(css_key_border_bottom_color,
-				     &slist[i]);
-			set_property(css_key_border_left_color,
-				     &slist[i]);
+			set_property(css_key_border_top_color, &slist[i]);
+			set_property(css_key_border_right_color, &slist[i]);
+			set_property(css_key_border_bottom_color, &slist[i]);
+			set_property(css_key_border_left_color, &slist[i]);
 			break;
 		case CSS_UNIT_PX:
 		case CSS_UNIT_INT:
-			set_property(css_key_border_top_width,
-				     &slist[i]);
-			set_property(css_key_border_right_width,
-				     &slist[i]);
-			set_property(css_key_border_bottom_width,
-				     &slist[i]);
-			set_property(css_key_border_left_width,
-				     &slist[i]);
+			set_property(css_key_border_top_width, &slist[i]);
+			set_property(css_key_border_right_width, &slist[i]);
+			set_property(css_key_border_bottom_width, &slist[i]);
+			set_property(css_key_border_left_width, &slist[i]);
 			break;
 		case CSS_UNIT_KEYWORD:
-			set_property(css_key_border_top_style,
-				     &slist[i]);
-			set_property(css_key_border_right_style,
-				     &slist[i]);
-			set_property(css_key_border_bottom_style,
-				     &slist[i]);
-			set_property(css_key_border_left_style,
-				     &slist[i]);
+			set_property(css_key_border_top_style, &slist[i]);
+			set_property(css_key_border_right_style, &slist[i]);
+			set_property(css_key_border_bottom_style, &slist[i]);
+			set_property(css_key_border_left_style, &slist[i]);
 			break;
 		default:
 			return -1;
@@ -258,7 +244,7 @@ static int css_parse_border_property(css_style_parser_t *parser,
 static int css_parse_border_radius_property(css_style_parser_t *parser,
 					    const char *str)
 {
-	css_unit_value_t s;
+	css_style_value_t s;
 
 	if (!css_parse_number(&s, str)) {
 		return -1;
@@ -273,7 +259,7 @@ static int css_parse_border_radius_property(css_style_parser_t *parser,
 static int css_parse_border_left_property(css_style_parser_t *parser,
 					  const char *str)
 {
-	css_unit_value_t slist[3];
+	css_style_value_t slist[3];
 	int i, mode = SPLIT_COLOR | SPLIT_NUMBER | SPLIT_STYLE;
 
 	if (split_values(str, slist, 3, mode) < 1) {
@@ -282,17 +268,14 @@ static int css_parse_border_left_property(css_style_parser_t *parser,
 	for (i = 0; i < 3; ++i) {
 		switch (slist[i].unit) {
 		case CSS_UNIT_COLOR:
-			set_property(css_key_border_left_color,
-				     &slist[i]);
+			set_property(css_key_border_left_color, &slist[i]);
 			break;
 		case CSS_UNIT_PX:
 		case CSS_UNIT_INT:
-			set_property(css_key_border_left_width,
-				     &slist[i]);
+			set_property(css_key_border_left_width, &slist[i]);
 			break;
 		case CSS_UNIT_keyword:
-			set_property(css_key_border_left_style,
-				     &slist[i]);
+			set_property(css_key_border_left_style, &slist[i]);
 			break;
 		default:
 			return -1;
@@ -304,7 +287,7 @@ static int css_parse_border_left_property(css_style_parser_t *parser,
 static int css_parse_border_top_property(css_style_parser_t *parser,
 					 const char *str)
 {
-	css_unit_value_t slist[3];
+	css_style_value_t slist[3];
 	int i, mode = SPLIT_COLOR | SPLIT_NUMBER | SPLIT_STYLE;
 
 	if (split_values(str, slist, 3, mode) < 1) {
@@ -313,17 +296,14 @@ static int css_parse_border_top_property(css_style_parser_t *parser,
 	for (i = 0; i < 3; ++i) {
 		switch (slist[i].unit) {
 		case CSS_UNIT_COLOR:
-			set_property(css_key_border_top_color,
-				     &slist[i]);
+			set_property(css_key_border_top_color, &slist[i]);
 			break;
 		case CSS_UNIT_PX:
 		case CSS_UNIT_INT:
-			set_property(css_key_border_top_width,
-				     &slist[i]);
+			set_property(css_key_border_top_width, &slist[i]);
 			break;
 		case CSS_UNIT_KEYWORD:
-			set_property(css_key_border_top_style,
-				     &slist[i]);
+			set_property(css_key_border_top_style, &slist[i]);
 			break;
 		default:
 			return -1;
@@ -335,7 +315,7 @@ static int css_parse_border_top_property(css_style_parser_t *parser,
 static int css_parse_border_right_property(css_style_parser_t *parser,
 					   const char *str)
 {
-	css_unit_value_t slist[3];
+	css_style_value_t slist[3];
 	int i, mode = SPLIT_COLOR | SPLIT_NUMBER | SPLIT_STYLE;
 
 	if (split_values(str, slist, 3, mode) < 1) {
@@ -344,17 +324,14 @@ static int css_parse_border_right_property(css_style_parser_t *parser,
 	for (i = 0; i < 3; ++i) {
 		switch (slist[i].unit) {
 		case CSS_UNIT_COLOR:
-			set_property(css_key_border_right_color,
-				     &slist[i]);
+			set_property(css_key_border_right_color, &slist[i]);
 			break;
 		case CSS_UNIT_PX:
 		case CSS_UNIT_INT:
-			set_property(css_key_border_right_width,
-				     &slist[i]);
+			set_property(css_key_border_right_width, &slist[i]);
 			break;
 		case CSS_UNIT_KEYWORD:
-			set_property(css_key_border_right_style,
-				     &slist[i]);
+			set_property(css_key_border_right_style, &slist[i]);
 			break;
 		default:
 			return -1;
@@ -366,7 +343,7 @@ static int css_parse_border_right_property(css_style_parser_t *parser,
 static int css_parse_border_bottom_property(css_style_parser_t *parser,
 					    const char *str)
 {
-	css_unit_value_t slist[3];
+	css_style_value_t slist[3];
 	int i, mode = SPLIT_COLOR | SPLIT_NUMBER | SPLIT_STYLE;
 
 	if (split_values(str, slist, 3, mode) < 1) {
@@ -375,17 +352,14 @@ static int css_parse_border_bottom_property(css_style_parser_t *parser,
 	for (i = 0; i < 3; ++i) {
 		switch (slist[i].unit) {
 		case CSS_UNIT_COLOR:
-			set_property(css_key_border_bottom_color,
-				     &slist[i]);
+			set_property(css_key_border_bottom_color, &slist[i]);
 			break;
 		case CSS_UNIT_PX:
 		case CSS_UNIT_INT:
-			set_property(css_key_border_bottom_width,
-				     &slist[i]);
+			set_property(css_key_border_bottom_width, &slist[i]);
 			break;
 		case CSS_UNIT_KEYWORD:
-			set_property(css_key_border_bottom_style,
-				     &slist[i]);
+			set_property(css_key_border_bottom_style, &slist[i]);
 			break;
 		default:
 			return -1;
@@ -397,7 +371,7 @@ static int css_parse_border_bottom_property(css_style_parser_t *parser,
 static int css_parse_border_color_property(css_style_parser_t *parser,
 					   const char *str)
 {
-	css_unit_value_t s;
+	css_style_value_t s;
 
 	// TODO: support parsing multiple values
 	// border-color: #eee transparent;
@@ -416,7 +390,7 @@ static int css_parse_border_color_property(css_style_parser_t *parser,
 static int css_parse_border_width_property(css_style_parser_t *parser,
 					   const char *str)
 {
-	css_unit_value_t s;
+	css_style_value_t s;
 
 	// TODO: support parsing multiple values
 	// border-width: 4px 0;
@@ -435,7 +409,7 @@ static int css_parse_border_width_property(css_style_parser_t *parser,
 static int css_parse_border_style_property(css_style_parser_t *parser,
 					   const char *str)
 {
-	css_unit_value_t s;
+	css_style_value_t s;
 
 	s.is_valid = TRUE;
 	s.val_keyword = css_get_keyword_key(str);
@@ -452,7 +426,7 @@ static int css_parse_border_style_property(css_style_parser_t *parser,
 static int css_parse_padding_property(css_style_parser_t *parser,
 				      const char *str)
 {
-	css_unit_value_t s[4];
+	css_style_value_t s[4];
 
 	switch (split_values(str, s, 4, SPLIT_NUMBER)) {
 	case 1:
@@ -487,7 +461,7 @@ static int css_parse_padding_property(css_style_parser_t *parser,
 static int css_parse_margin_property(css_style_parser_t *parser,
 				     const char *str)
 {
-	css_unit_value_t s[4];
+	css_style_value_t s[4];
 
 	switch (split_values(str, s, 4, SPLIT_NUMBER)) {
 	case 1:
@@ -522,7 +496,7 @@ static int css_parse_margin_property(css_style_parser_t *parser,
 static int css_parse_box_shadow_property(css_style_parser_t *parser,
 					 const char *str)
 {
-	css_unit_value_t s[5];
+	css_style_value_t s[5];
 
 	if (strcmp(str, "none") == 0) {
 		s[0].val_int = 0;
@@ -568,7 +542,7 @@ static int css_parse_background_property(css_style_parser_t *parser,
 static int css_parse_background_position_property(css_style_parser_t *parser,
 						  const char *str)
 {
-	css_unit_value_t slist[2];
+	css_style_value_t slist[2];
 	int ret = css_parse_keyword_value(parser, str);
 
 	if (ret == 0) {
@@ -585,8 +559,8 @@ static int css_parse_background_position_property(css_style_parser_t *parser,
 static int css_parse_background_size_property(css_style_parser_t *parser,
 					      const char *str)
 {
-	css_unit_value_t none;
-	css_unit_value_t slist[2];
+	css_style_value_t none;
+	css_style_value_t slist[2];
 	int ret = css_parse_keyword_value(parser, str);
 
 	none.is_valid = TRUE;
@@ -616,7 +590,7 @@ static int css_parse_background_repeat_property(css_style_parser_t *parser,
 static int css_parse_visibility_property(css_style_parser_t *parser,
 					 const char *str)
 {
-	css_unit_value_t s;
+	css_style_value_t s;
 
 	if (strcmp(str, "visible") == 0 || strcmp(str, "hidden") == 0) {
 		s.is_valid = TRUE;
@@ -632,8 +606,8 @@ static int css_parse_visibility_property(css_style_parser_t *parser,
 
 static int css_parse_flex_property(css_style_parser_t *parser, const char *str)
 {
-	css_unit_value_t s;
-	css_unit_value_t slist[3];
+	css_style_value_t s;
+	css_style_value_t slist[3];
 	int i, mode = SPLIT_NUMBER | SPLIT_STYLE;
 
 	if (strcmp("initial", str) == 0) {
@@ -707,8 +681,8 @@ static int css_parse_flex_property(css_style_parser_t *parser, const char *str)
 static int css_parse_flex_flow_property(css_style_parser_t *parser,
 					const char *str)
 {
-	css_unit_value_t s;
-	css_unit_value_t slist[2];
+	css_style_value_t s;
+	css_style_value_t slist[2];
 
 	if (strcmp(str, "wrap") == 0) {
 		s.is_valid = TRUE;
@@ -765,7 +739,7 @@ static int css_parse_flex_flow_property(css_style_parser_t *parser,
 static int css_parse_flex_basis_property(css_style_parser_t *parser,
 					 const char *str)
 {
-	css_unit_value_t s;
+	css_style_value_t s;
 
 	if (css_parse_keyword_value(parser, str) == 0) {
 		return 0;
@@ -780,7 +754,7 @@ static int css_parse_flex_basis_property(css_style_parser_t *parser,
 static int css_parse_flex_grow_property(css_style_parser_t *parser,
 					const char *str)
 {
-	css_unit_value_t s;
+	css_style_value_t s;
 
 	if (css_parse_number(&s, str)) {
 		set_property(css_key_flex_grow, &s);
@@ -792,7 +766,7 @@ static int css_parse_flex_grow_property(css_style_parser_t *parser,
 static int css_parse_flex_shrink_property(css_style_parser_t *parser,
 					  const char *str)
 {
-	css_unit_value_t s;
+	css_style_value_t s;
 
 	if (css_parse_number(&s, str)) {
 		set_property(css_key_flex_grow, &s);
@@ -801,9 +775,10 @@ static int css_parse_flex_shrink_property(css_style_parser_t *parser,
 	return -1;
 }
 
-static int css_parse_font_style_property(css_style_parser_t *parser, const char *str)
+static int css_parse_font_style_property(css_style_parser_t *parser,
+					 const char *str)
 {
-	css_unit_value_t s;
+	css_style_value_t s;
 
 	if (css_parse_font_style(str, &s.val_int)) {
 		s.is_valid = TRUE;
@@ -814,9 +789,10 @@ static int css_parse_font_style_property(css_style_parser_t *parser, const char 
 	return -1;
 }
 
-static int css_parse_font_weight_property(css_style_parser_t *parser, const char *str)
+static int css_parse_font_weight_property(css_style_parser_t *parser,
+					  const char *str)
 {
-	css_unit_value_t s;
+	css_style_value_t s;
 
 	if (css_parse_font_weight(str, &s.val_int)) {
 		s.is_valid = TRUE;
@@ -830,7 +806,7 @@ static int css_parse_font_weight_property(css_style_parser_t *parser, const char
 static int css_parse_text_value(css_style_parser_t *parser, const char *str)
 {
 	size_t len;
-	css_unit_value_t s;
+	css_style_value_t s;
 
 	len = strlen(str);
 	if (len < 1 || (str[0] == '"' && str[len - 1] != '"')) {
@@ -887,6 +863,40 @@ int css_register_property_parser(int key, const char *name,
 
 #define register_parser css_register_property_parser
 
+
+static int css_parse_length_value(const char *str, css_style_value_t *val)
+{
+	return 0;
+}
+
+static int css_parse_color_value(const char *str, css_style_value_t *val)
+{
+	return 0;
+}
+
+static int css_parse_percentage_value(const char *str, css_style_value_t *val)
+{
+	return 0;
+}
+
+static int css_parse_keyword_value(const char *str, css_style_value_t *val)
+{
+	return 0;
+}
+
+static int css_parse_image_value(const char *str, css_style_value_t *val)
+{
+	return 0;
+}
+
+
+static int css_on_parse_style_value(css_style_parser_t *parser, const char *str)
+{
+	css_style_value_t v;
+
+	set_current_property(&v);
+}
+
 void css_init_preset_property_parsers(void)
 {
 	static dict_type_t dt;
@@ -906,7 +916,7 @@ void css_init_preset_property_parsers(void)
 	register_parser(css_key_right, NULL, css_parse_number_value);
 	register_parser(css_key_bottom, NULL, css_parse_number_value);
 	register_parser(css_key_left, NULL, css_parse_number_value);
-	register_parser(css_key_z_index, NULL, css_parse_value);
+	register_parser(css_key_z_index, NULL, css_parse_numberic_value);
 	register_parser(css_key_opacity, NULL, css_parse_number_value);
 	register_parser(css_key_position, NULL, css_parse_keyword_value);
 	register_parser(css_key_visibility, NULL,
@@ -977,7 +987,8 @@ void css_init_preset_property_parsers(void)
 	register_parser(css_key_color, NULL, css_parse_color_value);
 	register_parser(css_key_font_family, NULL, css_parse_string_value);
 	register_parser(css_key_font_size, NULL, css_parse_number_value);
-	register_parser(css_key_font_style, NULL, css_parse_font_style_property);
+	register_parser(css_key_font_style, NULL,
+			css_parse_font_style_property);
 	register_parser(css_key_text_align, NULL, css_parse_keyword_value);
 	register_parser(css_key_line_height, NULL, css_parse_number_value);
 	register_parser(css_key_content, NULL, css_parse_text_value);
