@@ -147,74 +147,6 @@ typedef struct css_keyword_t {
 
 /* clang-format off */
 
-// https://developer.mozilla.org/en-US/docs/Web/API/CSS/RegisterProperty
-
-int css_compile_syntax(const char *syntax_str, css_syntax_t *out)
-{
-	char name[32];
-	int name_len;
-	unsigned i;
-
-	const char *p;
-	struct name_value_map {
-		const char *name;
-		css_style_value_parsing_func_t parser;
-	} map[] = {
-		{ "length", css_parse_length_value },
-		{ "percentage", css_parse_percentage_value },
-		{ "keyword", css_parse_keyword_value },
-		{ "color", css_parse_color_value },
-		{ "image", css_parse_image_value },
-	};
-	const unsigned map_size = sizeof(map) / sizeof(struct name_value_map);
-
-	out->length = 0;
-	for (p = syntax_str; *p; ++p) {
-		if (*p == '<') {
-			name_len = 0;
-			continue;
-		}
-		if (p == '|') {
-			return p + 1;
-		}
-		if (*p != '>') {
-			if (name_len == -1) {
-				continue;
-			}
-			if (name_len > sizeof(name)) {
-				return NULL;
-			}
-			name[name_len++] = *p;
-			continue;
-		}
-		name[name_len] = 0;
-		name_len = -1;
-		for (i = 0; i < map_size; ++i) {
-			if (strcmp(name, map[i].name) == 0) {
-				out->parsers[out->length++] = map[i].parser;
-				break;
-			}
-		}
-		if (i == map_size) {
-			return NULL;
-		}
-	}
-	return 0;
-}
-
-int css_parse_style_value_with_syntax(css_syntax_t *syntax, const char *str,
-				      css_style_value_t *val)
-{
-	unsigned i;
-
-	for (i = 0; i < syntax->length; ++i) {
-		if (syntax->parsers[i](str, val) == 0) {
-			return 0;
-		}
-	}
-	return -1;
-}
-
 static void css_property_definition_destroy(css_property_definition_t *prop)
 {
 	if (prop->name) {
@@ -1679,6 +1611,10 @@ static void css_init_properties(void)
 	css.properties = NULL;
 	css.properties_length = 0;
 
+	css_register_value_type_alias("shadow", "<length>{2,4} && <color>?");
+	css_register_value_type_alias("content-position", "center | start | end | flex-start | flex-end");
+	css_register_value_type_alias("content-distribution", "space-between | space-around | space-evenly | stretch"):
+
 	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/visibility */
 	css_register_property_with_key(css_key_visibility, "visibility", "visible | hidden", "visible");
 
@@ -1734,7 +1670,7 @@ static void css_init_properties(void)
 	css_register_property_with_key(css_key_background_position, "background-position",
 	"[\
 		[ left | center | right | top | bottom | <length> | <percentage> ]\
-		| [ left | center | right | <length> | <percentage> ] [ top | center | bottom | <length> | <percentage> ]
+		| [ left | center | right | <length> | <percentage> ] [ top | center | bottom | <length> | <percentage> ]\
 	]",
 	"0% 0%");
 
@@ -1828,66 +1764,63 @@ static void css_init_properties(void)
 	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/border-bottom-right-radius */
 	css_register_property_with_key(css_key_border_bottom_right_radius, "border-bottom-right-radius", "<length> | <percentage>", "0");
 
-	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/box-shadow */
 	css_register_property_with_key(css_key_box_shadow, "box-shadow", "none | <shadow>", "none");
 
 
-	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
-	css_register_property_with_key(css_key_pointer_events, "pointer-events" },
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/pointer-events */
+	css_register_property_with_key(css_key_pointer_events, "pointer-events", "auto | none", "auto");
 
-	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
-	css_register_property_with_key(css_key_focusable, "focusable" },
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/box-sizing */
+	css_register_property_with_key(css_key_box_sizing, "box-sizing", "content-box | border-box", "content-box");
 
-	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
-	css_register_property_with_key(css_key_box_sizing, "box-sizing" },
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/flex-basis */
+	css_register_property_with_key(css_key_flex_basis, "flex-basis", "auto | <width>", "auto");
 
-	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
-	css_register_property_with_key(css_key_flex_basis, "flex-basis" },
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/flex-direction */
+	css_register_property_with_key(css_key_flex_direction, "flex-direction", "row | column", "row");
 
-	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
-	css_register_property_with_key(css_key_flex_direction, "flex-direction" },
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/flex-grow */
+	css_register_property_with_key(css_key_flex_grow, "flex-grow", "<number>", "0");
 
-	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
-	css_register_property_with_key(css_key_flex_grow, "flex-grow" },
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/flex-shrink */
+	css_register_property_with_key(css_key_flex_shrink, "flex-shrink", "<number>", "1");
 
-	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
-	css_register_property_with_key(css_key_flex_shrink, "flex-shrink" },
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/flex-wrap */
+	css_register_property_with_key(css_key_flex_wrap, "flex-wrap", "nowrap | wrap", "nowrap");
 
-	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
-	css_register_property_with_key(css_key_flex_wrap, "flex-wrap" },
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/justify-content */
+	css_register_property_with_key(css_key_justify_content, "justify-content", "normal | <baseline-position> | <content-distribution>", "normal");
 
-	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
-	css_register_property_with_key(css_key_justify_content, "justify-content" },
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/align-content */
+	css_register_property_with_key(css_key_align_content, "align-content", "normal | <baseline-position> | <content-distribution>", "normal");
 
-	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
-	css_register_property_with_key(css_key_align_content, "align-content" },
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/align-items */
+	css_register_property_with_key(css_key_align_items, "align-items", "normal | stretch", "normal");
 
-	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
-	css_register_property_with_key(css_key_align_items, "align-items" },
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/color */
+	css_register_property_with_key(css_key_color, "color", "<color>", "#000");
 
-	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
-	css_register_property_with_key(css_key_color, "color" },
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/font-family */
+	css_register_property_with_key(css_key_font_family, "font-family", "<string>", "");
 
-	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
-	css_register_property_with_key(css_key_font_family, "font-family" },
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/font-size */
+	css_register_property_with_key(css_key_font_size, "font-size", "<length> | <percentage>", "16px");
 
-	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
-	css_register_property_with_key(css_key_font_size, "font-size" },
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/font-style */
+	css_register_property_with_key(css_key_font_style, "font-style", "normal | italic | oblique", "normal");
 
-	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
-	css_register_property_with_key(css_key_font_style, "font-style" },
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/text-align */
+	css_register_property_with_key(css_key_text_align, "text-align", "left | center | right", "left");
 
-	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
-	css_register_property_with_key(css_key_text_align, "text-align" },
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/line-height */
+	css_register_property_with_key(css_key_line_height, "line-height", "<number> | <length> | <percentage>", "1.6");
 
-	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
-	css_register_property_with_key(css_key_line_height, "line-height" },
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/content */
+	css_register_property_with_key(css_key_content, "content", "<string>", "");
 
-	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
-	css_register_property_with_key(css_key_content, "content" },
-
-	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/width */
-	css_register_property_with_key(css_key_white_space, "white-space" }
+	/** @see https://developer.mozilla.org/en-US/docs/Web/CSS/white-space */
+	css_register_property_with_key(css_key_white_space, "white-space", "normal | nowrap", "");
 
 }
 
@@ -1974,6 +1907,7 @@ void css_init(void)
 	css.strpool = strpool_create();
 	css_init_cache();
 	css_init_keywords();
+	css_init_value_definitons();
 	css_init_properties();
 	list_create(&css.groups);
 	css.count = STYLE_KEY_TOTAL;
@@ -1983,6 +1917,7 @@ void css_destroy(void)
 {
 	css_destroy_cache();
 	css_destroy_properties();
+	css_destroy_value_definitons();
 	css_destroy_keywords();
 	list_destroy(&css.groups, (list_item_destructor_t)dict_destroy);
 	strpool_destroy(css.strpool);

@@ -36,12 +36,6 @@
 
 LCUI_BEGIN_HEADER
 
-#define CASE_WHITE_SPACE \
-	case ' ':        \
-	case '\n':       \
-	case '\r':       \
-	case '\t'
-
 typedef enum css_parser_target_t {
 	CSS_PARSER_TARGET_NONE,      /**< 无 */
 	CSS_PARSER_TARGET_RULE_NAME, /**< 规则名称 */

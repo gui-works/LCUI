@@ -63,3 +63,7 @@ removeProperty()
 CSSStyleDeclaration getComputedStyle();
 
 ```
+
+MDN 并未描述 CSSStyleValue 内部的实现细节，对于多个值的情况，Chrome 浏览器中运行 `CSSStyleValue.parse('background-position', '0 0');` 后返回的结果是 CSSStyleValue 类型的对象，无法再展开该对象内部结构。
+
+那么对于 CSSStyleValue 的实现，将它设计为类似于链表的结构是个合适的选择，但这样需要多加一个字段来记录值的数量，会导致样式表内存占用增加。

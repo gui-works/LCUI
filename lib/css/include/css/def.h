@@ -7,6 +7,12 @@
 #define CSS_SELECTOR_MAX_LEN 1024
 #define CSS_SELECTOR_MAX_DEPTH 32
 
+#define CASE_WHITE_SPACE \
+	case ' ':        \
+	case '\n':       \
+	case '\r':       \
+	case '\t'
+
 typedef enum css_property_key_t {
 	// position start
 	css_key_left,
@@ -32,6 +38,7 @@ typedef enum css_property_key_t {
 	css_key_max_height,
 
 	// margin start
+	css_key_margin,
 	css_key_margin_top,
 	css_key_margin_right,
 	css_key_margin_bottom,
@@ -39,6 +46,7 @@ typedef enum css_property_key_t {
 	// margin end
 
 	// padding start
+	css_key_padding,
 	css_key_padding_top,
 	css_key_padding_right,
 	css_key_padding_bottom,
@@ -48,6 +56,7 @@ typedef enum css_property_key_t {
 	css_key_vertical_align,
 
 	// border start
+	css_key_border,
 	css_key_border_top_width,
 	css_key_border_top_style,
 	css_key_border_top_color,
@@ -67,6 +76,7 @@ typedef enum css_property_key_t {
 	// border end
 
 	// background start
+	css_key_background,
 	css_key_background_color,
 	css_key_background_image,
 	css_key_background_size,
@@ -81,15 +91,10 @@ typedef enum css_property_key_t {
 	css_key_background_origin,
 	// background end
 
-	// box shadow start
-	css_key_box_shadow_x,
-	css_key_box_shadow_y,
-	css_key_box_shadow_spread,
-	css_key_box_shadow_blur,
-	css_key_box_shadow_color,
-	// box shadow end
+	css_key_box_shadow,
 
 	// flex style start
+	css_key_flex,
 	css_key_flex_basis,
 	css_key_flex_grow,
 	css_key_flex_shrink,
@@ -188,6 +193,7 @@ typedef enum css_style_value_type_t {
 	CSS_NO_VALUE,
 	CSS_INVALID_VALUE,
 	CSS_UNPARSED_VALUE,
+	CSS_ARRAY_VALUE,
 
 	CSS_NUMBERIC_VALUE,
 	CSS_STRING_VALUE,
@@ -224,8 +230,11 @@ typedef struct css_unit_value_t {
 	char unit[4];
 } css_unit_value_t;
 
+typedef struct css_style_value_t css_style_value_t;
+typedef css_style_value_t * css_style_array_value_t;
+
 /** https://developer.mozilla.org/en-US/docs/Web/API/CSSStyleValue */
-typedef struct css_style_value_t {
+struct css_style_value_t {
 	css_style_value_type_t type;
 	union {
 		css_private_value_t value;
@@ -237,8 +246,9 @@ typedef struct css_style_value_t {
 		css_image_value_t image_value;
 		css_unparsed_value_t unparsed_value;
 		css_keyword_value_t keyword_value;
+		css_style_array_value_t array_value;
 	};
-} css_style_value_t;
+};
 
 struct css_style_declaration_t {
 	css_style_value_t *sheet;
@@ -259,12 +269,12 @@ typedef struct css_style_property_t {
 } css_style_property_t;
 
 typedef struct css_selector_node_t {
-	char *id;       /**< ID */
-	char *type;     /**< 类型名称 */
-	char **classes; /**< 样式类列表 */
-	char **status;  /**< 状态列表 */
+	char *id;
+	char *type;
+	char **classes;
+	char **status;
 	char *fullname; /**< 全名，由 id、type、classes、status 组合而成 */
-	int rank;       /**< 权值 */
+	int rank;
 } css_selector_node_t;
 
 typedef struct css_selector_t {
